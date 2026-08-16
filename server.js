@@ -1,3 +1,4 @@
+/* eslint-disable prefer-destructuring */
 const dotenv = require('dotenv');
 
 dotenv.config();
@@ -5,9 +6,11 @@ const express = require('express');
 
 const app = express();
 
+const session = require('express-session');
 const mongoose = require('mongoose');
 const methodOverride = require('method-override');
 const morgan = require('morgan');
+const MongoStore=require('connect-mongo').MongoStore;
 
 // CONTROLLERS
 const authCtrl = require('./controllers/authCtrl');
@@ -28,16 +31,38 @@ app.use(express.urlencoded({ extended: false }));
 app.use(methodOverride('_method'));
 // Morgan for logging HTTP requests
 app.use(morgan('dev'));
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: true,
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGODB_URI,
+    }),
+  })
+);
 
 // PUBLIC ROUTES
 app.get('/', async (req, res) => {
-  res.render('index.ejs');
+  const user = req.session.user;
+  res.render('index.ejs', { user });
 });
 
 app.get('/auth/sign-up', authCtrl.signup);
-app.post(`/auth/sign-up`, authCtrl.register);
+app.post('/auth/sign-up', authCtrl.register);
+app.get('/auth/sign-in', authCtrl.signin);
+app.post('/auth/sign-in', authCtrl.login);
 
 // PRIVATE ROUTES
+app.get('/auth/sign-out', authCtrl.signout);
+
+app.get('/protected', async (req, res) => {
+  if (req.session.user) {
+    return res.send(`You are logged in as ${req.session.user.username}`);
+  }
+
+  res.redirect('/');
+});
 
 app.listen(port, () => {
   console.log(`The express app is ready on port ${port}!`);
